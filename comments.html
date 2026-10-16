@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>댓글 말풍선 보기</title>
+<script src="viewer_data.js"></script>
+<script src="viewer_comments.js"></script>
+<style>
+:root{--bg:#f4f3ef;--card:#fff;--fg:#1b1b19;--mut:#706f69;--line:#e4e2dc;--acc:#1c69d4;--acc2:#e7effa;
+  --fav:#1d7a49;--favbg:#e6f4ec;--unf:#b2412c;--unfbg:#fbece8;--sh:0 1px 2px rgba(0,0,0,.05),0 6px 20px rgba(0,0,0,.05)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121211;--card:#1c1c1a;--fg:#ecebe4;--mut:#a09f98;--line:#2e2e2b;--acc:#5b9bf0;--acc2:#1d283a;
+  --fav:#6cc794;--favbg:#16291f;--unf:#ec8a73;--unfbg:#2e1b16;--sh:none}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif}
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1500px;margin:0 auto;padding:12px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+h1{font-size:19px;margin:0 8px 0 0;letter-spacing:-.02em}
+.tabs{display:flex;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.tabs a{padding:6px 12px;color:var(--mut);text-decoration:none;font-size:13px}.tabs a.on{background:var(--acc);color:#fff}
+select,input[type=search]{padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--fg);font:inherit}
+input[type=search]{min-width:180px}
+.chk{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--mut);cursor:pointer;white-space:nowrap}
+.btn{padding:7px 12px;border:0;border-radius:7px;background:var(--acc);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+.sp{flex:1}
+.sum{max-width:1500px;margin:14px auto 0;padding:0 20px;color:var(--mut);font-size:13px}
+.grid{max-width:1500px;margin:0 auto;padding:14px 20px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+@media (max-width:600px){.grid{grid-template-columns:1fr;padding:12px 16px}.top .in{padding:10px 16px}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--sh);display:flex;flex-direction:column}
+.thumb{position:relative;aspect-ratio:16/9;background:#000;display:block}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:.95}
+.thumb .play{position:absolute;inset:0;display:grid;place-items:center;opacity:0;transition:.2s;background:rgba(0,0,0,.25)}
+.thumb:hover .play{opacity:1}.play i{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.92);position:relative}
+.play i:after{content:"";position:absolute;left:21px;top:16px;border-left:15px solid #111;border-top:10px solid transparent;border-bottom:10px solid transparent}
+.badge{position:absolute;left:8px;top:8px;display:flex;gap:6px}
+.badge span{background:rgba(0,0,0,.72);color:#fff;font-size:11px;padding:2px 7px;border-radius:5px}
+.badge .hid{background:#c58b00}
+.meta{padding:10px 14px 4px}
+.meta .t{font-weight:700;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta .c{color:var(--mut);font-size:12.5px;margin-top:3px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:6px 14px 8px}
+.chip{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--acc2);color:var(--acc)}
+.chip.f{background:var(--favbg);color:var(--fav)}.chip.u{background:var(--unfbg);color:var(--unf)}
+.chat{padding:6px 12px 14px;display:flex;flex-direction:column;gap:8px;min-height:60px}
+.b{max-width:94%;padding:8px 11px;border-radius:14px 14px 14px 4px;background:var(--favbg);color:var(--fg);font-size:13px;line-height:1.45;position:relative;
+   opacity:0;transform:translateY(8px) scale(.98);transition:opacity .35s ease, transform .35s ease}
+.b.u{background:var(--unfbg);border-radius:14px 14px 4px 14px;align-self:flex-end}
+.b.show{opacity:1;transform:none}
+.b .l{display:block;margin-top:3px;font-size:11px;color:var(--mut)}
+.b mark{background:none;color:var(--fav);font-weight:700}.b.u mark{color:var(--unf)}
+.typing{align-self:flex-start;display:flex;gap:3px;padding:8px 10px;border-radius:12px;background:var(--favbg)}
+.typing i{width:5px;height:5px;border-radius:50%;background:var(--fav);opacity:.4;animation:tp 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes tp{50%{opacity:1;transform:translateY(-2px)}}
+.empty{color:var(--mut);font-size:12.5px;padding:4px 2px}
+.more{display:block;margin:0 auto 40px;padding:10px 22px}
+/* 발표 모드 */
+.show-mode{position:fixed;inset:0;z-index:20;background:#0d0d0c;color:#f1f0ea;display:none;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:36px;padding:48px 56px}
+.show-mode.on{display:grid}
+@media (max-width:900px){.show-mode{grid-template-columns:1fr;padding:20px;overflow:auto}}
+.sm-l img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:14px;display:block}
+.sm-l .t{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:18px 0 6px;line-height:1.3}
+.sm-l .c{color:#a9a8a1;font-size:15px}
+.sm-l .chips{padding:12px 0}.sm-l .chip{font-size:14px;padding:4px 12px}
+.sm-r{display:flex;flex-direction:column;gap:12px;justify-content:center;overflow:hidden}
+.sm-r .b{font-size:17px;padding:12px 16px;max-width:100%;color:#f1f0ea;background:#17301f}
+.sm-r .b.u{background:#3a1d17}.sm-r .b .l{color:#a9a8a1;font-size:13px}.sm-r .b mark{color:#7fe0a7}.sm-r .b.u mark{color:#f59a83}
+.sm-nav{position:absolute;bottom:16px;left:56px;right:56px;display:flex;justify-content:space-between;color:#8d8c86;font-size:13px}
+.sm-bar{position:absolute;top:0;left:0;height:3px;background:#5b9bf0;transition:width linear}
+.x{position:absolute;top:14px;right:18px;background:none;border:0;color:#aaa;font-size:26px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){.b{transition:none}.typing i{animation:none}}
+</style>
+</head>
+<body>
+<div class="top"><div class="in">
+  <h1 id="h1">댓글 말풍선 보기</h1>
+  <div class="tabs"><a href="viewer.html">표로 보기</a><a class="on" href="comments.html">말풍선으로 보기</a><a href="map.html">한눈에 보기</a></div>
+  <select id="brand" title="브랜드"></select>
+  <select id="sort" title="정렬">
+    <option value="score">우호 댓글 점수순</option><option value="fav">우호 댓글 많은 순</option>
+    <option value="views">조회수순</option><option value="date">최신 영상순</option></select>
+  <select id="fmt" title="형식"><option value="all">전체 형식</option><option value="long">일반 영상</option><option value="short">쇼츠</option></select>
+  <input type="search" id="q" placeholder="제목·채널·댓글 검색">
+  <label class="chk"><input type="checkbox" id="hidden"> 숨은 지면만(제목에 브랜드 없음)</label>
+  <label class="chk"><input type="checkbox" id="showUnf" checked> 비우호 댓글도 보기</label>
+  <span class="sp"></span>
+  <button class="btn" id="present">▶ 발표 모드</button>
+</div></div>
+<div class="sum" id="sum"></div>
+<div class="grid" id="grid"></div>
+<button class="btn more" id="more" hidden>더 보기</button>
+
+<div class="show-mode" id="sm">
+  <div class="sm-bar" id="smBar"></div>
+  <button class="x" id="smX" title="닫기 (Esc)">✕</button>
+  <div class="sm-l" id="smL"></div>
+  <div class="sm-r" id="smR"></div>
+  <div class="sm-nav"><span id="smPos"></span><span>← → 이동 · 스페이스 일시정지 · Esc 닫기</span></div>
+</div>
+
+<script>
+const DATA = window.CARDB || [], META = window.CARDB_META || {}, CMT = window.CARDB_CMT || {};
+const $ = id => document.getElementById(id);
+const nf = n => (n||0).toLocaleString("ko-KR");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const vidOf = url => (url.match(/v=([^&]+)/)||[])[1];
+const PAGE = 48;
+let BR = META.brand || "BMW", ROWS = [], LIST = [], shown = 0, BRX = null;
+
+// 브랜드 이름 강조용 간단 패턴 (화면 표시용)
+const HL = {"BMW":"BMW|비엠|bmw|\\d\\s?시리즈|X[1-7]|i[3-7]","벤츠":"벤츠|S클|E클|C클|이클|에스클|메르세데스|마이바흐","제네시스":"제네시스|G[789]0|GV[678]0",
+  "현대":"현대|현기|그랜저|아반떼|쏘나타|싼타페|팰리세이드|투싼","기아":"기아|쏘렌토|카니발|스포티지|K[589]","테슬라":"테슬라|모델\\s?[3SXY]","아우디":"아우디|A[3-8]|Q[3-8]",
+  "볼보":"볼보|XC[469]0","포르쉐":"포르쉐|카이엔|파나메라|타이칸|마칸","렉서스":"렉서스|ES\\d{3}|LS\\d{3}"};
+// 모델 선택 시 강조/숨은지면 판단에 쓸 패턴 (예: "BMW 7시리즈" → 7시리즈·740i·i7)
+const MHL = {"7시리즈":"7\\s?시리즈|칠시리즈|7[3-6]0\\s?[ieLd]|i7","5시리즈":"5\\s?시리즈|5[2-5]0\\s?[ide]|i5","3시리즈":"3\\s?시리즈|3[2-4]0\\s?[ide]|M3",
+  "X5·X6":"X5|X6","X3·X4":"X3|X4","S클래스":"S\\s?클|에스클|S\\s?\\d{3}","E클래스":"E\\s?클|이클|E\\s?\\d{3}","모델Y":"모델\\s?Y","모델3":"모델\\s?3"};
+function pat(b){ const i = b.indexOf(" "); if (i < 0) return HL[b] || b;
+  const m = b.slice(i+1); return MHL[m] || m.replace(/·/g,"|"); }
+function brandRx(b){ return new RegExp("(" + pat(b) + ")", "gi"); }
+
+function compute(){
+  const K = 200, K2 = 10; let ta = 0, tf = 0;
+  DATA.forEach(d => { ta += d.n; tf += (d.b[BR]||[0,0,0])[1]; });
+  const p0 = ta ? tf/ta : 0, ch = {};
+  DATA.forEach(d => { if (d.n >= 20){ const c = ch[d.chId] || (ch[d.chId]=[0,0]); c[0]++; if ((d.b[BR]||[0,0,0])[1] > 0) c[1]++; } });
+  let tv=0,tq=0; Object.values(ch).forEach(c=>{tv+=c[0];tq+=c[1];}); const q0 = tv ? tq/tv : 0;
+  BRX = brandRx(BR);
+  ROWS = DATA.map(d => { const x = d.b[BR]||[0,0,0], c = ch[d.chId], cm = (CMT[vidOf(d.url)]||{})[BR]||{f:[],u:[]};
+    return {...d, vid: vidOf(d.url), fav:x[1], unfav:x[2], score:(x[1]+K*p0)/(d.n+K)*100,
+      chScore: c ? (c[1]+K2*q0)/(c[0]+K2)*100 : q0*100, official:(d.off||[]).includes(BR.split(" ")[0]), cm,
+      hidden: !new RegExp(pat(BR),"i").test(d.title)}; });
+  $("h1").textContent = BR + " 댓글 말풍선 보기";
+}
+function filter(){
+  const q = $("q").value.trim().toLowerCase(), fmt = $("fmt").value, sort = $("sort").value;
+  LIST = ROWS.filter(r => r.fav > 0 && !r.kids && !r.official &&
+      (!$("hidden").checked || r.hidden) &&
+      (fmt==="all" || (fmt==="short" ? r.dur>0 && r.dur<=180 : r.dur>180)) &&
+      (!q || (r.title+" "+r.ch+" "+r.cm.f.map(c=>c[0]).join(" ")).toLowerCase().includes(q)))
+    .sort((a,b) => sort==="date" ? (b.date>a.date?1:-1) : b[sort]-a[sort]);
+  $("sum").textContent = `${nf(LIST.length)}개 영상 · 우호 댓글 ${nf(LIST.reduce((s,r)=>s+r.fav,0))}개` +
+    (META.updated ? ` · 마지막 업데이트 ${META.updated}` : "") + ` · 댓글 원문은 최근 30일 수집분만 보여요`;
+  $("grid").innerHTML = ""; shown = 0; more();
+}
+function hl(t){ return esc(t).replace(BRX, "<mark>$1</mark>"); }
+function bubbles(r, nF, nU){
+  const f = r.cm.f.slice(0,nF).map(c=>({c,u:0})), u = $("showUnf").checked ? r.cm.u.slice(0,nU).map(c=>({c,u:1})) : [];
+  const all = []; for (let i=0;i<Math.max(f.length,u.length);i++){ if(f[i]) all.push(f[i]); if(u[i] && i<nU) all.push(u[i]); }
+  return all.map(({c,u}) => `<div class="b${u?" u":""}">${hl(c[0])}<span class="l">${u?"비우호":"우호"} · ♥ ${nf(c[1])} · ${c[2]}</span></div>`).join("")
+    || `<div class="empty">우호 댓글 ${nf(r.fav)}개가 집계돼 있지만 원문은 30일이 지나 정리됐어요.</div>`;
+}
+function card(r){
+  const short = r.dur>0 && r.dur<=180;
+  return `<article class="card" data-i="${r.vid}">
+    <a class="thumb" href="${r.url}" target="_blank" rel="noopener">
+      <img loading="lazy" src="https://i.ytimg.com/vi/${r.vid}/mqdefault.jpg" alt="">
+      <div class="badge">${short?'<span>쇼츠</span>':''}${r.hidden?'<span class="hid">숨은 지면</span>':''}</div>
+      <div class="play"><i></i></div></a>
+    <div class="meta"><div class="t">${esc(r.title)}</div><div class="c">${esc(r.ch)} · 구독 ${nf(r.subs)} · ${r.date}</div></div>
+    <div class="chips"><span class="chip">조회 ${nf(r.views)}</span><span class="chip f">우호 ${nf(r.fav)}</span>
+      <span class="chip u">비우호 ${nf(r.unfav)}</span><span class="chip">점수 ${r.score.toFixed(2)}</span><span class="chip">채널 ${r.chScore.toFixed(1)}</span></div>
+    <div class="chat">${bubbles(r,4,2)}</div></article>`;
+}
+const io = new IntersectionObserver(es => es.forEach(e => { if(!e.isIntersecting) return; io.unobserve(e.target);
+  e.target.querySelectorAll(".b").forEach((b,i) => setTimeout(()=>b.classList.add("show"), 180 + i*260)); }), {threshold:.25});
+function more(){
+  const g = $("grid"), part = LIST.slice(shown, shown+PAGE);
+  g.insertAdjacentHTML("beforeend", part.map(card).join(""));
+  [...g.querySelectorAll(".card")].slice(shown).forEach(el => io.observe(el));
+  shown += part.length; $("more").hidden = shown >= LIST.length;
+}
+
+// 발표 모드
+let si = 0, timer = null, paused = false, tks = [];
+function slide(){
+  tks.forEach(clearTimeout); tks = [];
+  const r = LIST[si]; if (!r) return;
+  $("smL").innerHTML = `<img src="https://i.ytimg.com/vi/${r.vid}/hqdefault.jpg" alt="">
+    <div class="t">${esc(r.title)}</div><div class="c">${esc(r.ch)} · 구독 ${nf(r.subs)} · ${r.date}</div>
+    <div class="chips"><span class="chip">조회 ${nf(r.views)}</span><span class="chip f">${BR} 우호 ${nf(r.fav)}</span><span class="chip u">비우호 ${nf(r.unfav)}</span>${r.hidden?'<span class="chip">제목에 '+BR+' 없음</span>':''}</div>`;
+  $("smR").innerHTML = bubbles(r,5,1);
+  const bs = [...$("smR").querySelectorAll(".b")];
+  bs.forEach((b,i) => tks.push(setTimeout(()=>b.classList.add("show"), 400 + i*1100)));
+  $("smPos").textContent = `${si+1} / ${LIST.length}`;
+  const dur = 1200 + bs.length*1100 + 2500;
+  const bar = $("smBar"); bar.style.transition = "none"; bar.style.width = "0";
+  requestAnimationFrame(()=>{ bar.style.transition = `width ${dur}ms linear`; bar.style.width = paused ? "0" : "100%"; });
+  clearTimeout(timer); if (!paused) timer = setTimeout(()=>{ si = (si+1) % LIST.length; slide(); }, dur);
+}
+$("present").onclick = () => { if(!LIST.length) return; si = 0; paused = false; $("sm").classList.add("on"); slide(); };
+$("smX").onclick = () => { $("sm").classList.remove("on"); clearTimeout(timer); tks.forEach(clearTimeout); };
+document.addEventListener("keydown", e => { if(!$("sm").classList.contains("on")) return;
+  if (e.key==="Escape") $("smX").click();
+  if (e.key==="ArrowRight"){ si=(si+1)%LIST.length; slide(); }
+  if (e.key==="ArrowLeft"){ si=(si-1+LIST.length)%LIST.length; slide(); }
+  if (e.key===" "){ e.preventDefault(); paused=!paused; slide(); } });
+
+$("brand").innerHTML = (META.brands||[BR]).map(b => { const i = b.indexOf(" "), lbl = i < 0 ? b : "\u00a0\u00a0└ " + b.slice(i+1);
+  return `<option value="${b}"${b===BR?" selected":""}>${lbl}</option>`; }).join("");
+$("brand").onchange = e => { BR = e.target.value; compute(); filter(); };
+["sort","fmt","hidden","showUnf"].forEach(id => $(id).onchange = filter);
+let qt; $("q").oninput = () => { clearTimeout(qt); qt = setTimeout(filter, 250); };
+$("more").onclick = more;
+compute(); filter();
+</script>
+</body>
+</html>
