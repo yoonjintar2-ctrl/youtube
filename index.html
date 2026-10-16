@@ -242,12 +242,6 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Pretendard","A
 
 <div id="view">
   <div id="period">
-    <span class="lbl">업로드 기간</span>
-    <div class="seg" id="seg"></div>
-    <button id="calBtn" class="ico" title="기간 직접 선택"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
-    <div id="calPop"><div class="cp-t">기간 직접 선택</div>
-      <label>시작일<input type="date" id="dFrom"></label><label>종료일<input type="date" id="dTo"></label>
-      <div class="cp-b"><button id="calReset">전체</button><button id="calOk" class="pri">적용</button></div></div>
     <div class="mode" id="mode"><button data-m="fav" class="on" title="우호 댓글이 달린 영상과 그 우호 댓글만">♥ 우호 댓글만</button><button data-m="crit" title="비판 댓글이 달린 영상과 그 비판 댓글만 (다크 모드)">⚡ 비판 댓글만</button></div>
   </div>
   <div id="head"></div>
@@ -261,7 +255,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Pretendard","A
   <div id="wshade"></div>
   <div id="winfo"></div>
   <div id="focus"></div>
-  <div class="hint">카테고리를 클릭하면 영상들이 펼쳐져요 · 크기 = 영상 수와 조회수</div>
+  <div class="hint">카테고리를 클릭하면 영상들이 펼쳐져요 · 크기 = 영상 수와 최근 30일 조회수</div>
   <button class="wnav" id="wPrev" aria-label="이전 영상">‹</button><button class="wnav" id="wNext" aria-label="다음 영상">›</button>
   <div class="whint">마우스 휠 · ←→ 키 · 양옆 버튼으로 돌리기 · 가운데 영상 클릭 = 유튜브에서 보기</div>
 </div>
@@ -283,7 +277,8 @@ const yt=id=>"https://www.youtube.com/watch?v="+id;
 const thumb=(id,hq)=>`https://i.ytimg.com/vi/${id}/${hq?"hqdefault":"mqdefault"}.jpg`;
 const T=D.types, NT=T.length, CN=D.cats, CCOL=CN.map((_,i)=>PAL[i%PAL.length]);
 const V=D.v.map((r,i)=>{ const tc=new Array(NT).fill(0); for(let k=0;k<r[9].length;k+=2) tc[r[9][k]]=r[9][k+1];
-  return {i,id:r[0],cat:r[1],date:r[2],views:r[3],title:r[4],ch:r[5],short:r[6],n:r[7],fav:r[8],tc,summ:r[10]||"",top:r[11]||[],unf:r[12]||0}; });
+  const rv=(r.length>13&&r[13]!=null)?r[13]:r[3];   // 최근 30일 조회수(추정). 없으면 누적으로 대체
+  return {i,id:r[0],cat:r[1],date:r[2],views:rv,tot:r[3],title:r[4],ch:r[5],short:r[6],n:r[7],fav:r[8],tc,summ:r[10]||"",top:r[11]||[],unf:r[12]||0}; });
 const dates=V.map(v=>v.date).filter(Boolean).sort(), MIN=dates[0], MAX=dates[dates.length-1];
 document.querySelector(".hint").textContent+=` · ${D.updated} 기준`;
 // 표로 보기: 팝업으로 열기
@@ -292,24 +287,8 @@ const modal=$("modal");
 $("tblBtn").addEventListener("click",e=>{ e.stopPropagation(); const f=modal.querySelector("iframe"); if(!f.src) f.src="viewer.html"; modal.classList.add("show"); });
 modal.addEventListener("click",e=>{ if(e.target===modal||e.target.classList.contains("mx")) modal.classList.remove("show"); });
 
-// ── 기간 선택 ──
-const seg=$("seg"), dFrom=$("dFrom"), dTo=$("dTo");
-dFrom.min=dTo.min=MIN; dFrom.max=dTo.max=MAX; dFrom.value=MIN; dTo.value=MAX;
-const iso=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
-[["전체",0],["1년",365],["3개월",91],["1개월",30]].forEach(([lab,days],i)=>{
-  const b=document.createElement("button"); b.textContent=lab; if(!i) b.classList.add("on");
-  b.onclick=()=>{ seg.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-    dFrom.value=days?iso(new Date(Date.now()-days*864e5)):MIN; dTo.value=MAX; rebuild(); };
-  seg.appendChild(b);
-});
-const calPop=$("calPop");
-$("calBtn").addEventListener("click",e=>{ e.stopPropagation(); calPop.classList.toggle("show"); });
-calPop.addEventListener("click",e=>e.stopPropagation());
-$("calOk").addEventListener("click",()=>{ if(dFrom.value>dTo.value){ const t=dFrom.value; dFrom.value=dTo.value; dTo.value=t; }
-  seg.querySelectorAll("button").forEach(x=>x.classList.remove("on")); $("calBtn").classList.add("on"); calPop.classList.remove("show"); rebuild(); });
-$("calReset").addEventListener("click",()=>{ dFrom.value=MIN; dTo.value=MAX; $("calBtn").classList.remove("on"); seg.querySelector("button").click(); calPop.classList.remove("show"); });
-document.addEventListener("click",()=>calPop.classList.remove("show"));
-seg.addEventListener("click",()=>$("calBtn").classList.remove("on"));
+// 기간 메뉴 없음: 최근 30일 조회수가 MIN_RECENT 이상인 영상만 (기준값은 실측이 쌓인 뒤 조정)
+const MIN_RECENT=+(new URLSearchParams(location.search).get("min")||0);
 // BMW 우호 영상만 (기본 켜짐)
 let MODE="fav";
 const MW=()=>MODE==="fav"?"우호":"비판";
@@ -322,8 +301,7 @@ setMode("fav");
 // ── 집계 ──
 let S=null;
 function compute(){
-  const from=dFrom.value||MIN, to=dTo.value||MAX;
-  const sel=V.filter(v=>v.date&&v.date>=from&&v.date<=to&&cnt(v)>0);
+  const sel=V.filter(v=>v.views>=MIN_RECENT&&cnt(v)>0);
   const cats=CN.map((name,ci)=>({ci,name,color:CCOL[ci],vids:[],views:0,n:0,tc:new Array(NT).fill(0),favV:0,fav:0}));
   const tot=new Array(NT).fill(0); let total=0;
   sel.forEach(v=>{ const c=cats[v.cat]; c.vids.push(v); c.views+=v.views; c.n+=v.n; total+=v.n;
@@ -355,7 +333,7 @@ function branch(x1,y1,x2,y2,color,w,delay){
 function rebuild(){
   closeCat(true); compute(); layout();
   nodesEl.innerHTML=""; svg.innerHTML=""; const old=view.querySelector(".empty"); if(old) old.remove();
-  head.innerHTML=`<span class="nm">전체 카테고리</span><span class="sub">영상 ${S.sel.length.toLocaleString()}개 · 조회 ${kor(S.views)} · 분석 댓글 ${S.total.toLocaleString()}개 · <em>${esc(D.brand)} ${MW()} 댓글 ${S.favN.toLocaleString()}개</em></span>`;
+  head.innerHTML=`<span class="nm">전체 카테고리</span><span class="sub">영상 ${S.sel.length.toLocaleString()}개 · 최근 30일 조회 ${kor(S.views)} · 분석 댓글 ${S.total.toLocaleString()}개 · <em>${esc(D.brand)} ${MW()} 댓글 ${S.favN.toLocaleString()}개</em></span>`;
   if(!S.sel.length||!S.total){ view.insertAdjacentHTML("beforeend",'<div class="empty">이 기간에 올라온 영상이 없어요.</div>'); return; }
   drawNodes();
 }
@@ -378,7 +356,7 @@ function makeNode(c,k,big){
   const el=document.createElement("div"); el.className="node"; el.style.setProperty("--c",c.color); el.dataset.ci=c.ci;
   el.style.animationDelay=(k*.05)+"s";
   const vs=c.vids.slice(0,3);
-  el.innerHTML=`<div class="nlab" style="font-size:${fs}px">${esc(c.name)}<small>영상 ${c.vids.length.toLocaleString()} · 조회 ${kor(c.views)}</small></div>
+  el.innerHTML=`<div class="nlab" style="font-size:${fs}px">${esc(c.name)}<small>영상 ${c.vids.length.toLocaleString()} · 30일 조회 ${kor(c.views)}</small></div>
     <div class="pile" style="width:${Math.round(tw*1.3)}px;height:${Math.round(th*1.28)}px">`+
     vs.map((v,j)=>{ const w=j?Math.round(tw*.6):tw, h=Math.round(w*9/16);
       const pos=j===0?`left:${Math.round(tw*.15)}px;top:${Math.round(th*.14)}px;z-index:3`:(j===1?`left:0;top:0;z-index:1;transform:rotate(-6deg)`:`right:0;bottom:0;z-index:2;transform:rotate(5deg)`);
@@ -389,7 +367,7 @@ function makeNode(c,k,big){
 function layoutNodes(big,force){
   nodesEl.innerHTML=""; svg.innerHTML="";
   const hub=document.createElement("div"); hub.id="hub";
-  hub.innerHTML=`<b>${S.sel.length.toLocaleString()}</b>개 영상<small>조회 ${kor(S.views)}</small>`;
+  hub.innerHTML=`<b>${S.sel.length.toLocaleString()}</b>개 영상<small>최근 30일 조회 ${kor(S.views)}</small>`;
   hub.style.left=L.cx+"px"; hub.style.top=L.cy+"px"; nodesEl.appendChild(hub);
   const hubR=66, PAD=14;
   const bounds={x0:14,x1:L.vw-14,y0:L.top+6,y1:L.vh-30};
@@ -451,7 +429,7 @@ function openCat(ci){
   W.cards=list.map((v,j)=>{
     const el=document.createElement("div"); el.className="st"; el.style.setProperty("--c",c.color);
     el.style.cssText+=`;left:${sx-30}px;top:${sy-17}px;width:60px;height:34px;opacity:0;transition-delay:${(.1+Math.min(j*.03,.4)).toFixed(2)}s`;
-    el.innerHTML=`<img alt="" src="${thumb(v.id,j<12)}" onerror="this.style.display='none'"><span class="vw">${kor(v.views)}회</span><span class="rk">${j+1}위</span><div class="ttl">${esc(v.title)}</div><span class="clk"></span>`;
+    el.innerHTML=`<img alt="" src="${thumb(v.id,j<12)}" onerror="this.style.display='none'"><span class="vw" title="최근 30일 조회수">${kor(v.views)}회</span><span class="rk">${j+1}위</span><div class="ttl">${esc(v.title)}</div><span class="clk"></span>`;
     el.addEventListener("click",e=>{ e.stopPropagation(); if(Math.round(W.pos)===j && Math.abs(W.pos-j)<.15) window.open(yt(v.id),"_blank"); else spinTo(j); });
     spread.appendChild(el);
     return {el,v,f:.78+.22*Math.sqrt(v.views/maxv)};
@@ -644,7 +622,7 @@ function showSel(i){
   iz.style.setProperty("--c",c.color);
   iz.innerHTML=`<div class="wi" style="top:${W.bandBottom+30}px">
     <div class="wh"><span class="wt">${esc(v.title)}</span></div>
-    <div class="wm">${esc(v.ch)} · 조회 ${kor(v.views)} 회 · ${v.date}${v.short?" · 쇼츠":""} · 분석 댓글 ${kor(v.n)}개${cnt(v)?` · <b class="hl">${esc(D.brand)} ${MW()} 댓글 ${cnt(v)}개</b>`:""}</div>
+    <div class="wm">${esc(v.ch)} · 최근 30일 ${kor(v.views)}회 · 누적 ${kor(v.tot)}회 · ${v.date}${v.short?" · 쇼츠":""} · 분석 댓글 ${kor(v.n)}개${cnt(v)?` · <b class="hl">${esc(D.brand)} ${MW()} 댓글 ${cnt(v)}개</b>`:""}</div>
     <div class="wline"><b>영상 소개</b>${v.summ?esc(v.summ):'<span class="none">설명란 정보가 아직 없어요 (다음 수집 때 채워져요)</span>'}</div>
     <div class="wline">${types.length?types.map(x=>`<span class="tg2">${esc(T[x.t])} <em>${Math.round(x.n/Math.max(1,v.n)*100)}%</em></span>`).join(""):'<span class="none">분류된 댓글이 없어요</span>'}</div>
   </div>`;
@@ -699,7 +677,7 @@ function closeCat(silent){
   if(openCi<0&&!silent) return;
   closeFocus(true);
   openCi=-1;
-  const home=()=>{ if(S) head.innerHTML=`<span class="nm">전체 카테고리</span><span class="sub">영상 ${S.sel.length.toLocaleString()}개 · 조회 ${kor(S.views)} · 분석 댓글 ${S.total.toLocaleString()}개 · <em>${esc(D.brand)} ${MW()} 댓글 ${S.favN.toLocaleString()}개</em></span>`; };
+  const home=()=>{ if(S) head.innerHTML=`<span class="nm">전체 카테고리</span><span class="sub">영상 ${S.sel.length.toLocaleString()}개 · 최근 30일 조회 ${kor(S.views)} · 분석 댓글 ${S.total.toLocaleString()}개 · <em>${esc(D.brand)} ${MW()} 댓글 ${S.favN.toLocaleString()}개</em></span>`; };
   cancelAnimationFrame(W.raf); W.raf=0; $("winfo").innerHTML="";
   if(silent){ view.classList.remove("open"); spread.innerHTML=""; copy.innerHTML=""; return; }
   spread.classList.remove("ready");
@@ -741,7 +719,7 @@ function openFocus(v,c,orig){
   const types=v.tc.map((n,t)=>({t,n})).filter(x=>x.n>0).sort((a,b)=>b.n-a.n).slice(0,5);
   const info=document.createElement("div"); info.className="info";
   info.innerHTML=`<div class="ti">${esc(v.title)}</div>
-    <div class="me">${esc(v.ch)} · 조회 ${v.views.toLocaleString()}회 · ${v.date}${v.short?" · 쇼츠":""} · 분석 댓글 ${v.n.toLocaleString()}개</div>
+    <div class="me">${esc(v.ch)} · 최근 30일 ${v.views.toLocaleString()}회 · 누적 ${v.tot.toLocaleString()}회 · ${v.date}${v.short?" · 쇼츠":""} · 분석 댓글 ${v.n.toLocaleString()}개</div>
     <div class="row"><div class="col"><h4>영상 소개</h4><div class="${v.summ?"sm":"none"}">${v.summ?esc(v.summ):"설명란 정보가 아직 없어요 (다음 수집 때 채워져요)"}</div></div>
     <div class="col"><h4>댓글로 본 이 영상</h4><div class="tags">${types.length?types.map(x=>`<span>${esc(T[x.t])} <b>${Math.round(x.n/Math.max(1,v.n)*100)}%</b></span>`).join(""):'<span class="none">분류된 댓글이 없어요</span>'}</div></div></div>`;
   focus.appendChild(info);
