@@ -483,7 +483,7 @@ function wheelGeom(){
 }
 // 휠 뒤에 늘어선 사람들 실루엣 — '사람들의 여론'을 보여주는 배경 (뒷줄일수록 작고 옅게)
 const QS=new URLSearchParams(location.search);
-let BG=(QS.get("bg")||"C3").toUpperCase();
+let BG=(QS.get("bg")||"NONE").toUpperCase();   // 실루엣 배경은 보류 — ?bg=C3 등으로만 미리보기
 // 사람 실루엣 (정면, 50mm 표준 화각 비율: 머리 1 : 키 7.3). x=가운데, y=발끝 선, h=키
 function person(x,y,h,v,noCap){
   // 성인 표준 비율(약 7.4등신): 턱 1.0 · 어깨 1.35 · 허리 2.9 · 가랑이 3.75 · 손목 3.7 · 무릎 5.5 · 발 7.4 (머리 높이 단위)
@@ -532,6 +532,7 @@ function skyline(vw,base,hmax,seed,cls){
   return g+"</g>";
 }
 function bgArt(px,py,R,selH,amax){
+  if(BG==="NONE") return "";
   const vw=L.vw, vh=L.vh;
   const defs=`<defs><filter id="bl1" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.4"/></filter>
     <filter id="bl3" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3.5"/></filter>
