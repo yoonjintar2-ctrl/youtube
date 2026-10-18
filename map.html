@@ -56,6 +56,8 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Pretendard","A
 #calPop .cp-b button{font:inherit;font-size:12.5px;padding:5px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer}
 #calPop .cp-b .pri{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 #winfo .hl{color:var(--c);font-weight:900}
+#period select{font:inherit;font-size:12.5px;padding:5px 26px 5px 11px;border:1px solid var(--line);border-radius:16px;background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;color:var(--fg);cursor:pointer;-webkit-appearance:none;appearance:none;max-width:190px}
+#period select.on{border-color:var(--fg);font-weight:700}
 #period .mode{display:flex;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card)}
 #period .mode button{border:0;background:none;font:inherit;font-size:12.5px;padding:5px 12px;color:var(--mut);cursor:pointer;white-space:nowrap}
 #period .mode button[data-m="fav"].on{background:#2f8f5b;color:#fff;font-weight:700}
@@ -243,6 +245,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Pretendard","A
 <div id="view">
   <div id="period">
     <div class="mode" id="mode"><button data-m="fav" class="on" title="우호 댓글이 달린 영상과 그 우호 댓글만">♥ 우호 댓글만</button><button data-m="crit" title="비판 댓글이 달린 영상과 그 비판 댓글만 (다크 모드)">⚡ 비판 댓글만</button></div>
+    <select id="model" title="차종(모델)별로 보기"></select>
   </div>
   <div id="head"></div>
   <button id="close">닫기 ✕</button>
@@ -278,7 +281,8 @@ const thumb=(id,hq)=>`https://i.ytimg.com/vi/${id}/${hq?"hqdefault":"mqdefault"}
 const T=D.types, NT=T.length, CN=D.cats, CCOL=CN.map((_,i)=>PAL[i%PAL.length]);
 const V=D.v.map((r,i)=>{ const tc=new Array(NT).fill(0); for(let k=0;k<r[9].length;k+=2) tc[r[9][k]]=r[9][k+1];
   const rv=(r.length>13&&r[13]!=null)?r[13]:r[3];   // 최근 30일 조회수(추정). 없으면 누적으로 대체
-  return {i,id:r[0],cat:r[1],date:r[2],views:rv,tot:r[3],title:r[4],ch:r[5],short:r[6],n:r[7],fav:r[8],tc,summ:r[10]||"",top:r[11]||[],unf:r[12]||0}; });
+  const mf={}; const mc=r[14]||[]; for(let k=0;k<mc.length;k+=3) mf[mc[k]]=[mc[k+1],mc[k+2]];
+  return {mf,i,id:r[0],cat:r[1],date:r[2],views:rv,tot:r[3],title:r[4],ch:r[5],short:r[6],n:r[7],fav:r[8],tc,summ:r[10]||"",top:r[11]||[],unf:r[12]||0}; });
 const dates=V.map(v=>v.date).filter(Boolean).sort(), MIN=dates[0], MAX=dates[dates.length-1];
 document.querySelector(".hint").textContent+=` · ${D.updated} 기준`;
 // 표로 보기: 팝업으로 열기
@@ -292,8 +296,22 @@ const MIN_RECENT=+(new URLSearchParams(location.search).get("min")||0);
 // BMW 우호 영상만 (기본 켜짐)
 let MODE="fav";
 const MW=()=>MODE==="fav"?"우호":"비판";
-const cnt=v=>MODE==="fav"?v.fav:v.unf;
-function setMode(m){ MODE=m; document.querySelectorAll("#mode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
+let MODEL=-1;   // 차종 드롭다운 (-1 = 전체 차종)
+const MODELS=D.models||[];
+const cnt=v=>MODEL<0?(MODE==="fav"?v.fav:v.unf):((v.mf[MODEL]||[0,0])[MODE==="fav"?0:1]);
+const BR=()=>MODEL<0?D.brand:D.brand+" "+MODELS[MODEL];
+const modelSel=$("model");
+function fillModels(){   // 현재 모드(우호/비판)의 댓글 수 많은 차종부터
+  if(!MODELS.length){ modelSel.style.display="none"; return; }
+  const k=MODE==="fav"?0:1, tot=MODELS.map(()=>0), nv=MODELS.map(()=>0);
+  V.forEach(v=>{ for(const m in v.mf){ const c=v.mf[m][k]; if(c>0&&v.views>=MIN_RECENT){ tot[m]+=c; nv[m]++; } } });
+  const order=MODELS.map((_,i)=>i).filter(i=>nv[i]>0||i===MODEL).sort((a,b)=>tot[b]-tot[a]);
+  modelSel.innerHTML=`<option value="-1">전체 차종</option>`+order.map(i=>`<option value="${i}">${esc(MODELS[i])} (${nv[i]})</option>`).join("");
+  modelSel.value=String(MODEL); modelSel.classList.toggle("on",MODEL>=0);
+}
+modelSel.addEventListener("click",e=>e.stopPropagation());
+modelSel.addEventListener("change",()=>{ MODEL=+modelSel.value; modelSel.classList.toggle("on",MODEL>=0); rebuild(); });
+function setMode(m){ MODE=m; document.querySelectorAll("#mode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m)); fillModels();
   document.documentElement.dataset.theme = m==="crit" ? "dark" : "light"; document.body.classList.toggle("crit",m==="crit"); }
 document.querySelectorAll("#mode button").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); if(MODE===b.dataset.m) return; const o=openCi; setMode(b.dataset.m); rebuild(); }));
 setMode("fav");
@@ -333,8 +351,8 @@ function branch(x1,y1,x2,y2,color,w,delay){
 function rebuild(){
   closeCat(true); compute(); layout();
   nodesEl.innerHTML=""; svg.innerHTML=""; const old=view.querySelector(".empty"); if(old) old.remove();
-  head.innerHTML=`<span class="nm">전체 카테고리</span><span class="sub">영상 ${S.sel.length.toLocaleString()}개 · 최근 30일 조회 ${kor(S.views)} · 분석 댓글 ${S.total.toLocaleString()}개 · <em>${esc(D.brand)} ${MW()} 댓글 ${S.favN.toLocaleString()}개</em></span>`;
-  if(!S.sel.length||!S.total){ view.insertAdjacentHTML("beforeend",'<div class="empty">이 기간에 올라온 영상이 없어요.</div>'); return; }
+  head.innerHTML=`<span class="nm">전체 카테고리</span><span class="sub">영상 ${S.sel.length.toLocaleString()}개 · 최근 30일 조회 ${kor(S.views)} · 분석 댓글 ${S.total.toLocaleString()}개 · <em>${esc(BR())} ${MW()} 댓글 ${S.favN.toLocaleString()}개</em></span>`;
+  if(!S.sel.length||!S.total){ view.insertAdjacentHTML("beforeend",'<div class="empty">조건에 맞는 영상이 없어요.</div>'); return; }
   drawNodes();
 }
 
@@ -622,7 +640,7 @@ function showSel(i){
   iz.style.setProperty("--c",c.color);
   iz.innerHTML=`<div class="wi" style="top:${W.bandBottom+30}px">
     <div class="wh"><span class="wt">${esc(v.title)}</span></div>
-    <div class="wm">${esc(v.ch)} · 최근 30일 ${kor(v.views)}회 · 누적 ${kor(v.tot)}회 · ${v.date}${v.short?" · 쇼츠":""} · 분석 댓글 ${kor(v.n)}개${cnt(v)?` · <b class="hl">${esc(D.brand)} ${MW()} 댓글 ${cnt(v)}개</b>`:""}</div>
+    <div class="wm">${esc(v.ch)} · 최근 30일 ${kor(v.views)}회 · 누적 ${kor(v.tot)}회 · ${v.date}${v.short?" · 쇼츠":""} · 분석 댓글 ${kor(v.n)}개${cnt(v)?` · <b class="hl">${esc(BR())} ${MW()} 댓글 ${cnt(v)}개</b>`:""}</div>
     <div class="wline"><b>영상 소개</b>${v.summ?esc(v.summ):'<span class="none">설명란 정보가 아직 없어요 (다음 수집 때 채워져요)</span>'}</div>
     <div class="wline">${types.length?types.map(x=>`<span class="tg2">${esc(T[x.t])} <em>${Math.round(x.n/Math.max(1,v.n)*100)}%</em></span>`).join(""):'<span class="none">분류된 댓글이 없어요</span>'}</div>
   </div>`;
@@ -663,7 +681,7 @@ function showSel(i){
 // 이 영상에 달린 BMW 우호 댓글 (viewer_comments.js) — [좋아요, 글]
 function favComments(v){
   const o=(window.CARDB_CMT||{})[v.id]; if(!o) return [];
-  let f=[]; Object.keys(o).forEach(k=>{ if(k===D.brand||k.startsWith(D.brand+" ")) (o[k][MODE==="fav"?"f":"u"]||[]).forEach(x=>f.push([x[1]||0,x[0]])); });
+  let f=[]; Object.keys(o).forEach(k=>{ if(MODEL<0?(k===D.brand||k.startsWith(D.brand+" ")):k===BR()) (o[k][MODE==="fav"?"f":"u"]||[]).forEach(x=>f.push([x[1]||0,x[0]])); });
   const seen=new Set(); return f.sort((a,b)=>b[0]-a[0]).filter(x=>{ const key=x[1].slice(0,24); if(seen.has(key)) return false; seen.add(key); return true; });
 }
 const HL=new RegExp("(BMW|bmw|Bmw|비엠더블유|비엠|비머|[1-8] ?시리즈|X[1-7]|iX[1-3]?|i[4-7]|M[2-8])","g");
@@ -677,7 +695,7 @@ function closeCat(silent){
   if(openCi<0&&!silent) return;
   closeFocus(true);
   openCi=-1;
-  const home=()=>{ if(S) head.innerHTML=`<span class="nm">전체 카테고리</span><span class="sub">영상 ${S.sel.length.toLocaleString()}개 · 최근 30일 조회 ${kor(S.views)} · 분석 댓글 ${S.total.toLocaleString()}개 · <em>${esc(D.brand)} ${MW()} 댓글 ${S.favN.toLocaleString()}개</em></span>`; };
+  const home=()=>{ if(S) head.innerHTML=`<span class="nm">전체 카테고리</span><span class="sub">영상 ${S.sel.length.toLocaleString()}개 · 최근 30일 조회 ${kor(S.views)} · 분석 댓글 ${S.total.toLocaleString()}개 · <em>${esc(BR())} ${MW()} 댓글 ${S.favN.toLocaleString()}개</em></span>`; };
   cancelAnimationFrame(W.raf); W.raf=0; $("winfo").innerHTML="";
   if(silent){ view.classList.remove("open"); spread.innerHTML=""; copy.innerHTML=""; return; }
   spread.classList.remove("ready");
