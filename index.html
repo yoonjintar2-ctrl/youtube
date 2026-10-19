@@ -58,6 +58,11 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Pretendard","A
 #winfo .hl{color:var(--c);font-weight:900}
 #period select{font:inherit;font-size:12.5px;padding:5px 26px 5px 11px;border:1px solid var(--line);border-radius:16px;background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;color:var(--fg);cursor:pointer;-webkit-appearance:none;appearance:none;max-width:190px}
 #period select.on{border-color:var(--fg);font-weight:700}
+#period .dbtn{display:flex;align-items:center;gap:6px;font:inherit;font-size:12.5px;padding:5px 12px;border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--fg);cursor:pointer;white-space:nowrap}
+#period .dbtn.on{border-color:var(--fg);font-weight:700}
+#calPop .pre{display:flex;gap:5px;margin:2px 0 8px}
+#calPop .pre button{font:inherit;font-size:12px;padding:4px 9px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--fg);cursor:pointer}
+#calPop .cp-n{font-size:11.5px;color:var(--mut);margin-top:6px;line-height:1.45}
 #period .mode{display:flex;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card)}
 #period .mode button{border:0;background:none;font:inherit;font-size:12.5px;padding:5px 12px;color:var(--mut);cursor:pointer;white-space:nowrap}
 #period .mode button[data-m="fav"].on{background:#2f8f5b;color:#fff;font-weight:700}
@@ -246,6 +251,12 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "Pretendard","A
   <div id="period">
     <div class="mode" id="mode"><button data-m="fav" class="on" title="우호 댓글이 달린 영상과 그 우호 댓글만">♥ 우호 댓글만</button><button data-m="crit" title="비판 댓글이 달린 영상과 그 비판 댓글만 (다크 모드)">⚡ 비판 댓글만</button></div>
     <select id="model" title="차종(모델)별로 보기"></select>
+    <button id="calBtn" class="dbtn" title="댓글 작성일로 기간 선택 (최근 30일 안에서 하루 단위)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span id="calLab">전체 기간</span></button>
+    <div id="calPop"><div class="cp-t">댓글 작성일 기간</div>
+      <div class="pre"><button data-d="0">전체</button><button data-d="7">최근 7일</button><button data-d="14">최근 14일</button><button data-d="30">최근 30일</button></div>
+      <label>시작일<input type="date" id="dFrom"></label><label>종료일<input type="date" id="dTo"></label>
+      <div class="cp-n">이 기간에 작성된 BMW 우호(비판) 댓글이 있는 영상만 보여줘요. 원문 보관 기간 때문에 최근 30일 안에서만 고를 수 있어요.</div>
+      <div class="cp-b"><button id="calReset">전체</button><button id="calOk" class="pri">적용</button></div></div>
   </div>
   <div id="head"></div>
   <button id="close">닫기 ✕</button>
@@ -282,7 +293,7 @@ const T=D.types, NT=T.length, CN=D.cats, CCOL=CN.map((_,i)=>PAL[i%PAL.length]);
 const V=D.v.map((r,i)=>{ const tc=new Array(NT).fill(0); for(let k=0;k<r[9].length;k+=2) tc[r[9][k]]=r[9][k+1];
   const rv=(r.length>13&&r[13]!=null)?r[13]:r[3];   // 최근 30일 조회수(추정). 없으면 누적으로 대체
   const mf={}; const mc=r[14]||[]; for(let k=0;k<mc.length;k+=3) mf[mc[k]]=[mc[k+1],mc[k+2]];
-  return {mf,i,id:r[0],cat:r[1],date:r[2],views:rv,tot:r[3],title:r[4],ch:r[5],short:r[6],n:r[7],fav:r[8],tc,summ:r[10]||"",top:r[11]||[],unf:r[12]||0}; });
+  return {mf,dc:r[15]||[],i,id:r[0],cat:r[1],date:r[2],views:rv,tot:r[3],title:r[4],ch:r[5],short:r[6],n:r[7],fav:r[8],tc,summ:r[10]||"",top:r[11]||[],unf:r[12]||0}; });
 const dates=V.map(v=>v.date).filter(Boolean).sort(), MIN=dates[0], MAX=dates[dates.length-1];
 document.querySelector(".hint").textContent+=` · ${D.updated} 기준`;
 // 표로 보기: 팝업으로 열기
@@ -298,18 +309,45 @@ let MODE="fav";
 const MW=()=>MODE==="fav"?"우호":"비판";
 let MODEL=-1;   // 차종 드롭다운 (-1 = 전체 차종)
 const MODELS=D.models||[];
-const cnt=v=>MODEL<0?(MODE==="fav"?v.fav:v.unf):((v.mf[MODEL]||[0,0])[MODE==="fav"?0:1]);
+// 드롭다운 순서: 내연 세단 → 내연 SUV → 전기 세단 → 전기 SUV, 같은 그룹은 저가 → 고가 (데이터 없는 차종은 목록에서 빠짐)
+const MODEL_ORDER=["1시리즈","2시리즈","3시리즈","4시리즈","5시리즈","6시리즈","7시리즈","8시리즈","Z4","X1","X2","X3","X4","X5","X6","X7","XM","i4","i5","i7","iX1","iX2","iX3","iX"];
+const ordOf=n=>{ const i=MODEL_ORDER.indexOf(n); return i<0?999:i; };
+// 기간(댓글 작성일) 필터: DF=null 이면 전체 기간 누적, [a,b] 면 D.d0 기준 날짜번호 a~b 에 작성된 댓글만
+let DF=null;
+const D0=D.d0||null, dayOf=iso=>Math.round((Date.parse(iso)-Date.parse(D0))/864e5), isoOf=n=>new Date(Date.parse(D0)+n*864e5).toISOString().slice(0,10);
+const TODAY=D0?Math.max(0,dayOf((D.updated||"").slice(0,10))):0;
+function counts(v,m){   // [우호, 비판]
+  if(!DF) return m<0?[v.fav,v.unf]:(v.mf[m]||[0,0]);
+  const want=m<0?0:m+1; let f=0,u=0;
+  for(let k=0;k<v.dc.length;k+=4) if(v.dc[k+1]===want&&v.dc[k]>=DF[0]&&v.dc[k]<=DF[1]){ f+=v.dc[k+2]; u+=v.dc[k+3]; }
+  return [f,u];
+}
+const cnt=v=>counts(v,MODEL)[MODE==="fav"?0:1];
 const BR=()=>MODEL<0?D.brand:D.brand+" "+MODELS[MODEL];
 const modelSel=$("model");
 function fillModels(){   // 현재 모드(우호/비판)의 댓글 수 많은 차종부터
   if(!MODELS.length){ modelSel.style.display="none"; return; }
-  const k=MODE==="fav"?0:1, tot=MODELS.map(()=>0), nv=MODELS.map(()=>0);
-  V.forEach(v=>{ for(const m in v.mf){ const c=v.mf[m][k]; if(c>0&&v.views>=MIN_RECENT){ tot[m]+=c; nv[m]++; } } });
-  const order=MODELS.map((_,i)=>i).filter(i=>nv[i]>0||i===MODEL).sort((a,b)=>tot[b]-tot[a]);
+  const k=MODE==="fav"?0:1, nv=MODELS.map(()=>0);
+  V.forEach(v=>{ if(v.views<MIN_RECENT) return; MODELS.forEach((_,m)=>{ if(counts(v,m)[k]>0) nv[m]++; }); });
+  const order=MODELS.map((_,i)=>i).filter(i=>nv[i]>0||i===MODEL).sort((a,b)=>ordOf(MODELS[a])-ordOf(MODELS[b]));
   modelSel.innerHTML=`<option value="-1">전체 차종</option>`+order.map(i=>`<option value="${i}">${esc(MODELS[i])} (${nv[i]})</option>`).join("");
   modelSel.value=String(MODEL); modelSel.classList.toggle("on",MODEL>=0);
 }
 modelSel.addEventListener("click",e=>e.stopPropagation());
+const calPop=$("calPop"), dFrom=$("dFrom"), dTo=$("dTo"), calBtn=$("calBtn");
+if(!D0) calBtn.style.display="none";
+else { dFrom.min=dTo.min=isoOf(0); dFrom.max=dTo.max=isoOf(TODAY); dFrom.value=isoOf(0); dTo.value=isoOf(TODAY); }
+const md=iso=>{ const [,m,d]=iso.split("-"); return `${+m}/${+d}`; };
+function setDF(df){ DF=df; calBtn.classList.toggle("on",!!DF); $("calLab").textContent=DF?`${md(isoOf(DF[0]))} ~ ${md(isoOf(DF[1]))}`:"전체 기간";
+  if(DF){ dFrom.value=isoOf(DF[0]); dTo.value=isoOf(DF[1]); } fillModels(); rebuild(); }
+calBtn.addEventListener("click",e=>{ e.stopPropagation(); calPop.classList.toggle("show"); });
+calPop.addEventListener("click",e=>e.stopPropagation());
+calPop.querySelectorAll(".pre button").forEach(b=>b.addEventListener("click",()=>{ const n=+b.dataset.d;
+  if(!n){ dFrom.value=isoOf(0); dTo.value=isoOf(TODAY); } else { dFrom.value=isoOf(Math.max(0,TODAY-n+1)); dTo.value=isoOf(TODAY); } }));
+$("calOk").addEventListener("click",()=>{ let a=dayOf(dFrom.value||isoOf(0)), b=dayOf(dTo.value||isoOf(TODAY)); if(a>b) [a,b]=[b,a];
+  a=Math.max(0,a); b=Math.min(TODAY,b); calPop.classList.remove("show"); setDF([a,b]); });
+$("calReset").addEventListener("click",()=>{ calPop.classList.remove("show"); setDF(null); });
+document.addEventListener("click",()=>calPop.classList.remove("show"));
 modelSel.addEventListener("change",()=>{ MODEL=+modelSel.value; modelSel.classList.toggle("on",MODEL>=0); rebuild(); });
 function setMode(m){ MODE=m; document.querySelectorAll("#mode button").forEach(b=>b.classList.toggle("on",b.dataset.m===m)); fillModels();
   document.documentElement.dataset.theme = m==="crit" ? "dark" : "light"; document.body.classList.toggle("crit",m==="crit"); }
@@ -675,13 +713,13 @@ function showSel(i){
     el.style.borderRadius = above ? (left?"20px 20px 5px 20px":"20px 20px 20px 5px") : (left?"20px 5px 20px 20px":"5px 20px 20px 20px");
 
   });
-  if(!cm.length) wi.insertAdjacentHTML("beforeend",'<div class="wline"><span class="none">원문이 30일이 지나 지워져서 보여줄 댓글이 없어요</span></div>');
+  if(!cm.length) wi.insertAdjacentHTML("beforeend",`<div class="wline"><span class="none">${DF?"이 기간에 작성된 댓글 미리보기가 없어요":"원문이 30일이 지나 지워져서 보여줄 댓글이 없어요"}</span></div>`);
 }
 
 // 이 영상에 달린 BMW 우호 댓글 (viewer_comments.js) — [좋아요, 글]
 function favComments(v){
   const o=(window.CARDB_CMT||{})[v.id]; if(!o) return [];
-  let f=[]; Object.keys(o).forEach(k=>{ if(MODEL<0?(k===D.brand||k.startsWith(D.brand+" ")):k===BR()) (o[k][MODE==="fav"?"f":"u"]||[]).forEach(x=>f.push([x[1]||0,x[0]])); });
+  let f=[]; Object.keys(o).forEach(k=>{ if(MODEL<0?(k===D.brand||k.startsWith(D.brand+" ")):k===BR()) (o[k][MODE==="fav"?"f":"u"]||[]).forEach(x=>{ if(DF&&x[2]&&(dayOf(x[2])<DF[0]||dayOf(x[2])>DF[1])) return; f.push([x[1]||0,x[0]]); }); });
   const seen=new Set(); return f.sort((a,b)=>b[0]-a[0]).filter(x=>{ const key=x[1].slice(0,24); if(seen.has(key)) return false; seen.add(key); return true; });
 }
 const HL=new RegExp("(BMW|bmw|Bmw|비엠더블유|비엠|비머|[1-8] ?시리즈|X[1-7]|iX[1-3]?|i[4-7]|M[2-8])","g");
